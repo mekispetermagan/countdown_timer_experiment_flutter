@@ -16,7 +16,7 @@ class CountdownStatus {
 }
 
 class CountdownManager {
-  final int _totalSeconds;
+  int _totalSeconds;
   final int _dangerZoneSeconds;
   late int _startingMs;
   int _elapsedMs = 0;
@@ -47,6 +47,8 @@ class CountdownManager {
       isRunning: _isRunning,
     );
   }
+
+  set totalSeconds(int value) => _totalSeconds = value;
 
   void start(int tickerMs) {
     _isRunning = true;
@@ -111,10 +113,12 @@ class CountdownRing extends StatelessWidget {
 class CountdownLabel extends StatelessWidget {
   final int remainingSeconds;
   final Color color;
+  final double fontSize;
 
   const CountdownLabel({
     required this.remainingSeconds,
     required this.color,
+    required this.fontSize,
     super.key
   });
 
@@ -125,7 +129,7 @@ class CountdownLabel extends StatelessWidget {
       ? remainingSeconds.toString().padLeft(2, '0')
       : "0",
       style: TextStyle(
-        fontSize: 30,
+        fontSize: fontSize,
         fontWeight: FontWeight.bold,
         color: color,
       )
@@ -135,8 +139,10 @@ class CountdownLabel extends StatelessWidget {
 
 class CountdownTimer extends StatelessWidget {
   final CountdownStatus status;
+  final double baseSize;
   const CountdownTimer({
     required this.status,
+    required this.baseSize,
     super.key
   });
 
@@ -192,8 +198,8 @@ class CountdownTimer extends StatelessWidget {
         CountdownRing(
           value: value,
           rotationAngle: rotationAngle,
-          size: 48,
-          strokeWidth: 48,
+          size: baseSize*1.5,
+          strokeWidth: baseSize*1.5,
           fgColor: bgRingTrack,
           bgColor: bgRingFill,
         ),
@@ -201,17 +207,45 @@ class CountdownTimer extends StatelessWidget {
         CountdownRing(
           value: value,
           rotationAngle: rotationAngle,
-          size: 96,
-          strokeWidth: 6,
+          size: baseSize*3,
+          strokeWidth: baseSize/4,
           fgColor: fgRingTrack,
           bgColor: fgRingFill,
         ),
         CountdownLabel(
           remainingSeconds: status.remainingSeconds,
           color: labelColor,
+          fontSize: baseSize,
         ),
       ],
     );
+  }
+}
+
+class Selector<T> extends StatelessWidget {
+  final List<({String label, T value})> options;
+  final T selected;
+  final void Function(Set<T>) onSelectionChanged;
+  const Selector({
+    required this.options,
+    required this.selected,
+    required this.onSelectionChanged,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<T>(
+      selected: {selected},
+      onSelectionChanged: onSelectionChanged,
+      segments: [
+        for (({String label, T value}) item in options)
+          ButtonSegment<T>(
+            value: item.value,
+            label: Text(item.label),
+            )
+      ],
+  );
   }
 }
 
@@ -246,13 +280,17 @@ class HomePageState extends State<HomePage>
   int _timeMs = 0;
   late Ticker _ticker;
   late final CountdownManager _manager;
+  double _baseSize = 30;
+  int _totalSeconds = 45;
+  bool _hasStarted = false;
+
   HomePageState();
 
   @override
   void initState() {
     super.initState();
     _manager = CountdownManager(
-      totalSeconds: 15,
+      totalSeconds: _totalSeconds,
       dangerZoneSeconds: 10);
     _ticker = createTicker((elapsed) {
       setState(() {
@@ -269,8 +307,22 @@ class HomePageState extends State<HomePage>
   }
 
   void _onRestart() {
+    _hasStarted = true;
     _manager.reset(_timeMs);
     _manager.start(_timeMs);
+  }
+
+  void _onSelectSize(Set<double> sizeSet) {
+    setState((){
+      _baseSize = sizeSet.single;
+    });
+  }
+
+  void _onSelectTotalSeconds(Set<int> set) {
+    setState((){
+      _totalSeconds = set.single;
+      _manager.totalSeconds = _totalSeconds;
+    });
   }
 
   @override
@@ -278,29 +330,68 @@ class HomePageState extends State<HomePage>
     final ColorScheme cs = Theme.of(context).colorScheme;
     final CountdownStatus status = _manager.status;
     return Scaffold(
-      appBar: AppBar(title: Text("Countdown timer")),
+      appBar: AppBar(
+        title: Text("Fancy Countdown timer"),
+        foregroundColor: cs.onPrimaryContainer,
+        backgroundColor: cs.primaryContainer,
+        ),
       body: SizedBox.expand(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            CountdownTimer(status: status),
-            TextButton(
-              onPressed: _onRestart,
-              style: ButtonStyle(
-                backgroundColor: WidgetStatePropertyAll(cs.primaryContainer),
-                foregroundColor: WidgetStatePropertyAll(cs.onPrimaryContainer),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                child: Text(
-                  "Restart",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+            CountdownTimer(
+              status: status,
+              baseSize: _baseSize,
+            ),
+            Column(
+              children: <Widget>[
+                TextButton(
+                  onPressed: _onRestart,
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStatePropertyAll(cs.primaryContainer),
+                    foregroundColor: WidgetStatePropertyAll(cs.onPrimaryContainer),
                   ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                    child: Text(
+                      _hasStarted ? "Restart" : "Start",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-              ),
+                ),
+                SizedBox(
+                  height: 30,
+                  width: 0,
+                ),
+                Selector<double>(
+                  options: [
+                    (label: "S", value: 30),
+                    (label: "M", value: 40),
+                    (label: "L", value: 60),
+                    (label: "XL", value: 80),
+                  ],
+                  selected: _baseSize,
+                  onSelectionChanged: _onSelectSize,
+                ),
+                SizedBox(
+                  height: 30,
+                  width: 0,
+                ),
+                Selector<int>(
+                  options: [
+                    (label: "15s", value: 15),
+                    (label: "30s", value: 30),
+                    (label: "45s", value: 45),
+                    (label: "60s", value: 60),
+                  ],
+                  selected: _totalSeconds,
+                  onSelectionChanged: _onSelectTotalSeconds,
+                ),
+              ],
             ),
           ],
         ),
