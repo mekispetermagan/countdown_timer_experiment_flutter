@@ -73,6 +73,66 @@ class CountdownManager {
   }
 }
 
+class CountdownRing extends StatelessWidget {
+  final double value;
+  final double rotationAngle;
+  final double size;
+  final double strokeWidth;
+  final Color fgColor;
+  final Color bgColor;
+  const CountdownRing({
+    required this.value,
+    required this.rotationAngle,
+    required this.size,
+    required this.strokeWidth,
+    required this.fgColor,
+    required this.bgColor,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Transform.rotate(
+        angle: rotationAngle,
+        child: CircularProgressIndicator(
+          value: value,
+          strokeWidth: strokeWidth,
+          color: fgColor,
+          backgroundColor: bgColor,
+        ),
+      ),
+    );
+  }
+}
+
+class CountdownLabel extends StatelessWidget {
+  final int remainingSeconds;
+  final Color color;
+
+  const CountdownLabel({
+    required this.remainingSeconds,
+    required this.color,
+    super.key
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      0 != remainingSeconds
+      ? remainingSeconds.toString().padLeft(2, '0')
+      : "0",
+      style: TextStyle(
+        fontSize: 30,
+        fontWeight: FontWeight.bold,
+        color: color,
+      )
+    );
+  }
+}
+
 class CountdownTimer extends StatelessWidget {
   final CountdownStatus status;
   const CountdownTimer({
@@ -83,57 +143,72 @@ class CountdownTimer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final int phase = 0 < status.remainingSeconds
-      ? status.remainingSeconds % 2
+    final double rotationAngle = -status.remainingSeconds / 30 * pi;
+    final double value = status.isRunning
+      ? status.withinSecondMs / 1000
       : 1;
+
+    final bool danger = status.isInDangerZone;
+    final bool filling = status.isRunning && status.remainingSeconds % 2 == 0;
+
+    final Color bgRingTrack;
+    final Color bgRingFill;
+    final Color fgRingTrack;
+    final Color fgRingFill;
+    switch ((danger, filling)) {
+      case (true, true) : {
+        bgRingTrack = cs.surface;
+        bgRingFill = cs.errorContainer;
+        fgRingTrack = cs.surface;
+        fgRingFill = cs.onErrorContainer;
+      }
+      case (true, false) : {
+        bgRingTrack = cs.errorContainer;
+        bgRingFill = cs.surface;
+        fgRingTrack = cs.onErrorContainer;
+        fgRingFill = cs.surface;
+      }
+      case (false, true) : {
+        bgRingTrack = cs.surface;
+        bgRingFill = cs.secondaryContainer;
+        fgRingTrack = cs.surface;
+        fgRingFill = cs.onSecondaryContainer;
+      }
+      case (false, false) : {
+        bgRingTrack = cs.secondaryContainer;
+        bgRingFill = cs.surface;
+        fgRingTrack = cs.onSecondaryContainer;
+        fgRingFill = cs.surface;
+      }
+    }
+    Color labelColor = status.isInDangerZone
+      ? cs.onSecondaryContainer
+      : cs.onErrorContainer;
+
     return Stack(
       alignment: Alignment.center,
       children: <Widget>[
-        SizedBox(
-          width: 45,
-          height: 45,
-          child: Transform.rotate(
-            angle: status.remainingSeconds / 30 * pi,
-            child: CircularProgressIndicator(
-              value: status.withinSecondMs / 1000,
-              strokeWidth: 45,
-              color: status.isInDangerZone
-                ? phase == 1 ? cs.secondaryContainer : cs.surface
-                : phase == 1 ? cs.errorContainer : cs.surface,
-              backgroundColor: status.isInDangerZone
-                ? phase == 1 ? cs.surface : cs.secondaryContainer
-                : phase == 1 ? cs.surface : cs.errorContainer,
-            ),
-          ),
+        // bg ring: sector with container color
+        CountdownRing(
+          value: value,
+          rotationAngle: rotationAngle,
+          size: 48,
+          strokeWidth: 48,
+          fgColor: bgRingTrack,
+          bgColor: bgRingFill,
         ),
-        SizedBox(
-          width: 90,
-          height: 90,
-          child: Transform.rotate(
-            angle: status.remainingSeconds / 30 * pi,
-            child: CircularProgressIndicator(
-              value: status.withinSecondMs / 1000,
-              strokeWidth: 6,
-              color: status.isInDangerZone
-                ? phase == 1 ? cs.onSecondaryContainer : cs.surface
-                : phase == 1 ? cs.onErrorContainer : cs.surface,
-              backgroundColor: status.isInDangerZone
-                ? phase == 1 ? cs.surface : cs.onSecondaryContainer
-                : phase == 1 ? cs.surface : cs.onErrorContainer,
-            ),
-          ),
+        // fg ring: arc with onContainer color
+        CountdownRing(
+          value: value,
+          rotationAngle: rotationAngle,
+          size: 96,
+          strokeWidth: 6,
+          fgColor: fgRingTrack,
+          bgColor: fgRingFill,
         ),
-        Text(
-          0 != status.remainingSeconds
-          ? status.remainingSeconds.toString().padLeft(2, '0')
-          : "0",
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.bold,
-            color: status.isInDangerZone
-              ? cs.onSecondaryContainer
-              : cs.onErrorContainer,
-          )
+        CountdownLabel(
+          remainingSeconds: status.remainingSeconds,
+          color: labelColor,
         ),
       ],
     );
@@ -177,7 +252,7 @@ class HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     _manager = CountdownManager(
-      totalSeconds: 60,
+      totalSeconds: 15,
       dangerZoneSeconds: 10);
     _ticker = createTicker((elapsed) {
       setState(() {
